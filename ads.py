@@ -11,7 +11,7 @@ class ADS:
     """
 
     def __init__( self, env, accident_prob, inj_fat_in,
-    inj_fat_out, n_passengers=4 ):
+    inj_fat_out, weights, n_passengers=4 ):
 
         # Road details
         self.road    = env["road"]
@@ -29,9 +29,9 @@ class ADS:
                                   "ut_accident" : -6,
                                   "ut_injury"   : -30,
                                   "ut_fatality" : -100,
-                                  "w_comfort"   : 0.2,
-                                  "w_sec_in"    : 0.3,
-                                  "w_sec_out"   : 0.3
+                                  "w_comfort"   : weights[0],
+                                  "w_sec_in"    : weights[1],
+                                  "w_sec_out"   : weights[2]
                                   }
 
         self.speed_decisions = accident_prob.columns.values.astype('int')
