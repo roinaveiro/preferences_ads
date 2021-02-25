@@ -11,9 +11,11 @@ def do_exp(w, N_sim):
     fat_out = np.zeros(N_sim)
     inj_in  = np.zeros(N_sim)
     inj_out = np.zeros(N_sim)
+    trip_duration = np.zeros(N_sim)
+    l = 200
     ##
     for i in range(N_sim):
-        sim = simulator(200)
+        sim = simulator(l)
         env = sim.simulate_environment()
         ads =  ADS(env, accident_prob, inj_fat_in, inj_fat_out, w)
         ads.complete_road()
@@ -24,13 +26,15 @@ def do_exp(w, N_sim):
         fat_out[i] = ads.fatalities_out
         inj_in[i]  = ads.injuries_in
         inj_out[i] = ads.injuries_out
+        trip_duration[i] = l/ads.speed_sel.mean()
         
     df = pd.DataFrame({"avg_ut": avg_ut,
              "n_accidents": acc,
              "n_fat_in": fat_in,
              "n_fat_out": fat_out,
              "n_inj_in" : inj_in,
-             "n_inj_out": inj_out})
+             "n_inj_out": inj_out,
+             "trip_duration": trip_duration})
     
     return df
 
@@ -40,7 +44,11 @@ if __name__ == "__main__":
     inj_fat_out   =   pd.read_csv("data/inj_fat_prob_out", index_col=0, delim_whitespace=True)
     inj_fat_in    =   pd.read_csv("data/inj_fat_prob_in", index_col=0, delim_whitespace=True)
 
+    inj_fat_in  = [x.drop(columns="type").values for _, x in inj_fat_in.groupby(inj_fat_in['type']) ]
+    inj_fat_out = [x.drop(columns="type").values for _, x in inj_fat_out.groupby(inj_fat_out['type']) ]
+
     for i in np.arange(0.0, 0.8, 0.1):
+        print(i)
         w = [0.3, i, 1-(0.3+i)]
         df = do_exp(w, 500)
         name = "results/exp_wsecin_" + str(np.round(w[1], 1) ) + ".csv"

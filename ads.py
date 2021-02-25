@@ -19,8 +19,8 @@ class ADS:
 
         self.n_passengers = n_passengers
 
-        self.inj_fat_in = inj_fat_in.values
-        self.inj_fat_out = inj_fat_out.values
+        self.inj_fat_in = inj_fat_in
+        self.inj_fat_out = inj_fat_out
         
         self.accident_prob     = accident_prob
         self.N                 = len(self.road)
@@ -43,13 +43,13 @@ class ADS:
         self.utilities = np.zeros(self.N)
 
         # Pre-compute expected utilities
-        self.eut_inj_in = []
-        self.eut_fat_in = []
+        # self.eut_inj_in = []
+        # self.eut_fat_in = []
 
-        for i in self.speed_decisions:
-            a,b = self.compute_fat_inj_eut_in(i)
-            self.eut_inj_in.append(a)
-            self.eut_fat_in.append(b)
+        # for i in self.speed_decisions:
+        #     a,b = self.compute_fat_inj_eut_in(i)
+        #     self.eut_inj_in.append(a)
+        #     self.eut_fat_in.append(b)
 
 
         # Init ads
@@ -63,6 +63,9 @@ class ADS:
         self.injuries_in = 0
         self.fatalities_out = 0
         self.fatalities_in = 0
+
+        self.skids = 0
+        self. crashes = 0
 
 
         ##
@@ -98,13 +101,16 @@ class ADS:
 
     def compute_cell_exp_utility(self, speed, lane):
 
-        p_acc = self.compute_accident_probability(speed, lane)
+        p_acc, acc_type = self.compute_accident_probability(speed, lane)
         
         comfort_eut = self.ut_params["ut_speed"][speed] + p_acc*self.ut_params["ut_accident"]
-        sec_in_eut  = p_acc*( self.eut_fat_in[speed] + self.eut_inj_in[speed] )
+        #sec_in_eut  = p_acc*( self.eut_fat_in[speed] + self.eut_inj_in[speed] )
 
-        a, b = self.compute_fat_inj_eut_out(speed, lane)
+        a, b = self.compute_fat_inj_eut_out(speed, lane, acc_type)
         sec_out_eut = p_acc*(a+b)
+
+        c, d = self.compute_fat_inj_eut_in(speed, acc_type)
+        sec_in_eut = p_acc*(c+d)
         
         eut = (self.ut_params["w_comfort"]*comfort_eut +
                self.ut_params["w_sec_in"]*sec_in_eut   +
@@ -118,20 +124,37 @@ class ADS:
         content = self.road[self.current_cell, lane]
         people  = self.people[self.current_cell, lane]
 
-        indicator_people = 3 if people >= 2 else 4 if people>0 else 5
+        indicator_people = 3 if people >= 3 else 4 if people>0 else 5
 
-        return ( self.accident_prob.iloc[content][speed] + 
+        p_acc = ( self.accident_prob.iloc[content][speed] + 
                 self.accident_prob.iloc[indicator_people][speed] )
 
-    def compute_fat_inj_eut_out(self, speed, lane):
+        if people == 0:
+            if content == 0:
+                acc_type = 0
+            if content == 1:
+                acc_type = 1
+            if content == 2:
+                acc_type = 5
+        else:
+            if content == 0:
+                acc_type = 3
+            if content == 1:
+                acc_type = 4
+            if content == 2:
+                acc_type = 2
+
+        return p_acc, acc_type
+
+    def compute_fat_inj_eut_out(self, speed, lane, acc_type):
 
         n_ped = self.people[self.current_cell, lane]
 
         if n_ped == 0:
             return 0.0, 0.0 
         else:
-            inj_fat = multinomial(n_ped, 
-                self.inj_fat_out[:, speed])
+            p_mul = self.inj_fat_out[acc_type][:, speed]
+            inj_fat = multinomial(n_ped, p_mul)
             
             eut_fat = 0.0
             eut_inj = 0.0
@@ -149,11 +172,11 @@ class ADS:
         
         return eut_inj, eut_fat
 
-    def compute_fat_inj_eut_in(self, speed):
+    def compute_fat_inj_eut_in(self, speed, acc_type):
 
         n_ped = self.n_passengers
-        inj_fat = multinomial(n_ped, 
-            self.inj_fat_in[:, speed])
+        p_mul = self.inj_fat_in[acc_type][:, speed]
+        inj_fat = multinomial(n_ped, p_mul)
         
         eut_fat = 0.0
         eut_inj = 0.0
@@ -174,19 +197,27 @@ class ADS:
 
     def compute_cell_utility(self, speed, lane):
 
-        p_acc = self.compute_accident_probability(speed, lane)
+        p_acc, acc_type = self.compute_accident_probability(speed, lane)
         accident = np.random.choice([0,1], p=[1-p_acc, p_acc])
 
         comfort_ut = self.ut_params["ut_speed"][speed] + accident*self.ut_params["ut_accident"]
 
         if accident == 1:
+
             self.accidents += 1
 
-            out_events = self.sample_fat_inj_out(speed, lane)
+            if (acc_type == 0) or (acc_type == 3):
+                self.crashes +=1
+
+            if (acc_type == 1) or (acc_type == 4):
+                self.skids +=1
+            
+
+            out_events = self.sample_fat_inj_out(speed, lane, acc_type)
             sec_out_ut = ( out_events[1] * self.ut_params["ut_injury"] +
                             out_events[2] * self.ut_params["ut_fatality"])
 
-            in_events  = self.sample_fat_inj_in(speed)
+            in_events  = self.sample_fat_inj_in(speed, acc_type)
             sec_in_ut = ( in_events[1] * self.ut_params["ut_injury"] +
                             in_events[2] * self.ut_params["ut_fatality"])
 
@@ -206,22 +237,22 @@ class ADS:
 
         return ut
 
-    def sample_fat_inj_out(self, speed, lane):
+    def sample_fat_inj_out(self, speed, lane, acc_type):
 
         n_ped = self.people[self.current_cell, lane]
         if n_ped == 0:
             return np.array([0, 0, 0])
         else:
-            inj_fat = multinomial(n_ped, 
-                self.inj_fat_out[:, speed])
+            p_mul = self.inj_fat_out[acc_type][:, speed]
+            inj_fat = multinomial(n_ped, p_mul)
             
             return inj_fat.rvs()[0]
     
-    def sample_fat_inj_in(self, speed):
+    def sample_fat_inj_in(self, speed, acc_type):
 
         n_ped = self.n_passengers
-        inj_fat = multinomial(n_ped, 
-            self.inj_fat_in[:, speed])
+        p_mul = self.inj_fat_in[acc_type][:, speed]
+        inj_fat = multinomial(n_ped, p_mul)
         
         return inj_fat.rvs()[0]
 

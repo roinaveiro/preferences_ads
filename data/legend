@@ -13,3 +13,11 @@
 3 - "More than 2 pedestrians"
 4 - "1 or 2 pedestrians"
 5 - "0 pedestrians"
+
+----------
+
+0 - "Rock"
+1 - "Water"
+2 - "People"
+3 - "Rock + People"
+4 - "Skid + People"
