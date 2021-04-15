@@ -38,9 +38,15 @@ class ADS:
         self.lane_decisions = np.array([0,1])
 
         # To store decisions and utilities
+        self.acc_type = np.zeros(self.N) + 5
         self.speed_sel = np.zeros(self.N)
         self.lane_sel  = np.zeros(self.N)
         self.utilities = np.zeros(self.N)
+
+        self.ut_speed = np.zeros(self.N)
+        self.ut_in = np.zeros(self.N)
+        self.ut_out = np.zeros(self.N)
+
 
         # Pre-compute expected utilities
         # self.eut_inj_in = []
@@ -77,7 +83,15 @@ class ADS:
         self.lane_sel[self.current_cell] = cell_lane
 
         # Evaluate utilities
-        self.utilities[self.current_cell] = self.compute_cell_utility(cell_speed, cell_lane)
+        comfort_ut, sec_in_ut, sec_out_ut = self.compute_cell_utility(cell_speed, cell_lane)
+
+        self.ut_speed[self.current_cell] = comfort_ut
+        self.ut_in[self.current_cell] = sec_in_ut
+        self.ut_out[self.current_cell] = sec_out_ut
+        
+        self.utilities[self.current_cell] =  (self.ut_params["w_comfort"]*comfort_ut +
+               self.ut_params["w_sec_in"]*sec_in_ut   +
+               self.ut_params["w_sec_out"]*sec_out_ut)
 
 
         # Move 
@@ -199,12 +213,14 @@ class ADS:
 
         p_acc, acc_type = self.compute_accident_probability(speed, lane)
         accident = np.random.choice([0,1], p=[1-p_acc, p_acc])
+        
 
         comfort_ut = self.ut_params["ut_speed"][speed] + accident*self.ut_params["ut_accident"]
 
         if accident == 1:
 
             self.accidents += 1
+            self.acc_type[self.current_cell] = acc_type
 
             if (acc_type == 0) or (acc_type == 3):
                 self.crashes +=1
@@ -231,11 +247,9 @@ class ADS:
             sec_out_ut = 0.0
             sec_in_ut  = 0.0
 
-        ut =  (self.ut_params["w_comfort"]*comfort_ut +
-               self.ut_params["w_sec_in"]*sec_in_ut   +
-               self.ut_params["w_sec_out"]*sec_out_ut)
+        return comfort_ut, sec_in_ut, sec_out_ut
 
-        return ut
+    
 
     def sample_fat_inj_out(self, speed, lane, acc_type):
 

@@ -16,7 +16,7 @@ class simulator:
             
         ##
         if dynamics is None:
-            self._road_dynamics = pd.read_csv("data/road_state_evol", index_col=0, delim_whitespace=True)
+            self._road_dynamics = pd.read_csv("data/road_state_evol_bis", index_col=0, delim_whitespace=True)
             ##
         else:
             self._road_dynamics = dynamics[0]
